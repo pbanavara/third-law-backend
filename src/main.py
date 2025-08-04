@@ -9,6 +9,11 @@ from enum import Enum
 from core.text_processor import PDFTextProcessor
 from core.db_client import ClickHouseClient
 import time
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
 
 class APIVersion(str, Enum):
     V1 = "1.0"
@@ -36,10 +41,10 @@ def init_db_client():
     for attempt in range(max_retries):
         try:
             db_client = ClickHouseClient(
-                host="am2q8y22r3.us-west-2.aws.clickhouse.cloud",
-                port=9440,  # ClickHouse Cloud native protocol port
-                username="default",
-                password="AQ3n3bXM~wDtq"
+                host=os.getenv('CLICKHOUSE_HOST', 'localhost'),
+                port=int(os.getenv('CLICKHOUSE_PORT', '9440')),
+                username=os.getenv('CLICKHOUSE_USER', 'default'),
+                password=os.getenv('CLICKHOUSE_PASSWORD', '')
             )
             print("Successfully initialized ClickHouse client")
             return
@@ -120,6 +125,20 @@ async def upload_pdf(
         # Check if the uploaded file is a PDF
         if not file.filename.endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+        
+        # Check if file already exists
+        existing_doc = db_client.get_document_by_filename(file.filename)
+        if existing_doc:
+            return JSONResponse(
+                content={
+                    "status": "exists",
+                    "document_id": existing_doc['document_id'],
+                    "message": "Document already exists",
+                    "api_version": api_version or APIVersion.V1,
+                    "analysis": existing_doc['analysis_result']
+                },
+                status_code=200
+            )
         
         # Create a unique document ID
         document_id = str(uuid.uuid4())
