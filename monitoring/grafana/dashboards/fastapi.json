@@ -1,0 +1,150 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Request Rate by Endpoint",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+      "targets": [{
+        "expr": "rate(http_requests_total[1m])",
+        "legendFormat": "{{method}} {{endpoint}}"
+      }]
+    },
+    {
+      "title": "Response Time Percentiles by Endpoint",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, endpoint))",
+          "legendFormat": "p50 {{endpoint}}"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, endpoint))",
+          "legendFormat": "p95 {{endpoint}}"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, endpoint))",
+          "legendFormat": "p99 {{endpoint}}"
+        }
+      ]
+    },
+    {
+      "title": "Error Rate by Endpoint",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "targets": [{
+        "expr": "sum(rate(http_requests_total{status=~\"5..|4..\"}[1m])) by (endpoint)",
+        "legendFormat": "{{endpoint}}"
+      }]
+    },
+    {
+      "title": "Average Response Time by Endpoint",
+      "type": "timeseries",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "targets": [{
+        "expr": "rate(http_request_duration_seconds_sum[1m]) / rate(http_request_duration_seconds_count[1m])",
+        "legendFormat": "{{endpoint}}"
+      }]
+    },
+    {
+      "title": "System Resources",
+      "type": "stat",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        }
+      },
+      "targets": [
+        {
+          "expr": "process_memory_rss_bytes / 1024 / 1024",
+          "legendFormat": "Memory (MB)"
+        },
+        {
+          "expr": "process_cpu_usage_percent",
+          "legendFormat": "CPU %"
+        },
+        {
+          "expr": "process_open_fds",
+          "legendFormat": "Open FDs"
+        }
+      ]
+    },
+    {
+      "title": "Database Connection Status",
+      "type": "gauge",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "options": {
+        "minValue": 0,
+        "maxValue": 1,
+        "thresholds": {
+          "mode": "absolute",
+          "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ]
+        }
+      },
+      "targets": [{
+        "expr": "db_pool_size",
+        "legendFormat": "DB Connected"
+      }]
+    },
+    {
+      "title": "Request Duration Distribution",
+      "type": "heatmap",
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "options": {
+        "calculate": true,
+        "calculation": {
+          "xBuckets": {
+            "mode": "size",
+            "value": 10
+          }
+        }
+      },
+      "targets": [{
+        "expr": "sum(increase(http_request_duration_seconds_bucket[1m])) by (le)",
+        "format": "heatmap",
+        "legendFormat": "{{le}}"
+      }]
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": [],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "FastAPI Metrics",
+  "version": 1,
+  "weekStart": ""
+} 

@@ -1,5 +1,5 @@
 from clickhouse_driver import Client
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 import json
 from datetime import datetime
 
@@ -207,3 +207,45 @@ class ClickHouseClient:
         except Exception as e:
             print(f"Error getting statistics from ClickHouse: {str(e)}")
             return {} 
+
+    def get_all_documents(self, limit: int = 100, offset: int = 0) -> List[Dict[str, Any]]:
+        """Get all documents with pagination support."""
+        try:
+            query = """
+            SELECT
+                document_id,
+                filename,
+                upload_timestamp,
+                content_length,
+                sensitive_info_count,
+                email_count,
+                ssn_count
+            FROM documents
+            ORDER BY upload_timestamp DESC
+            LIMIT %(limit)s
+            OFFSET %(offset)s
+            """
+            result = self.client.execute(
+                query,
+                {'limit': limit, 'offset': offset},
+                with_column_types=True
+            )
+            
+            if not result[0]:
+                return []
+                
+            documents = []
+            for row in result[0]:
+                documents.append({
+                    'document_id': row[0],
+                    'filename': row[1],
+                    'upload_timestamp': row[2].isoformat(),
+                    'content_length': row[3],
+                    'sensitive_info_count': row[4],
+                    'email_count': row[5],
+                    'ssn_count': row[6]
+                })
+            return documents
+        except Exception as e:
+            print(f"Error retrieving documents from ClickHouse: {str(e)}")
+            return [] 
