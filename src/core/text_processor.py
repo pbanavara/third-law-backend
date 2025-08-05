@@ -1,102 +1,76 @@
 from abc import ABC, abstractmethod
+from typing import Dict, Any, List
 import re
-from typing import List, Dict, Any
-from dataclasses import dataclass
+import time
+import logging
 
-@dataclass
-class SensitiveInfo:
-    """Data class to store sensitive information findings"""
-    info_type: str
-    value: str
-    location: int  # character position in text
+logger = logging.getLogger(__name__)
 
 class TextHandler(ABC):
-    """Abstract base class for text handlers"""
     @abstractmethod
-    def process(self, text: str) -> List[SensitiveInfo]:
-        """Process text and return list of sensitive information found"""
+    def process(self, text: str) -> List[Dict[str, Any]]:
         pass
 
 class RegexHandler(TextHandler):
-    """Handler that uses regex patterns to identify sensitive information"""
-    
-    # Regex patterns for different types of sensitive information
-    PATTERNS = {
-        'email': r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b',
-        'ssn': r'\b\d{3}-?\d{2}-?\d{4}\b'
-    }
-    
-    def process(self, text: str) -> List[SensitiveInfo]:
+    def __init__(self):
+        # Compile regex patterns once at initialization
+        self.patterns = {
+            'email': re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'),
+            'ssn': re.compile(r'\b\d{3}-?\d{2}-?\d{4}\b')
+        }
+
+    def process(self, text: str) -> List[Dict[str, Any]]:
+        findings = []
+        for pattern_type, pattern in self.patterns.items():
+            findings.extend(self._find_matches(text, pattern, pattern_type))
+        return findings
+
+    def _find_matches(self, text: str, pattern: re.Pattern, pattern_type: str) -> List[Dict[str, Any]]:
+        matches = pattern.finditer(text)
         findings = []
         
-        # Process each pattern
-        for info_type, pattern in self.PATTERNS.items():
-            # Find all matches with their positions
-            for match in re.finditer(pattern, text):
-                findings.append(
-                    SensitiveInfo(
-                        info_type=info_type,
-                        value=match.group(),
-                        location=match.start()
-                    )
-                )
+        for match in matches:
+            findings.append({
+                'type': pattern_type,
+                'value': match.group(),
+                'start': match.start(),
+                'end': match.end()
+            })
         
         return findings
 
 class PDFTextProcessor:
-    """Main class for processing PDF text"""
-    
     def __init__(self):
-        # Initialize handlers
-        self.handlers = [
-            RegexHandler(),
-            # Future: Add HeuristicsHandler and LLMHandler
-        ]
-    
+        self.handlers = [RegexHandler()]
+
     def process_text(self, text: str) -> Dict[str, Any]:
-        """
-        Process text through all handlers and return findings
+        start_time = time.time()
         
-        Returns:
-            Dict containing:
-            - success: bool
-            - findings: List of sensitive information found
-            - statistics: Dict with processing statistics
-        """
         all_findings = []
-        stats = {
-            'total_chars_processed': len(text),
-            'handlers_used': len(self.handlers)
-        }
+        findings_by_type = {}
         
-        try:
-            # Process text through each handler
-            for handler in self.handlers:
-                findings = handler.process(text)
-                all_findings.extend(findings)
+        for handler in self.handlers:
+            findings = handler.process(text)
+            all_findings.extend(findings)
             
-            # Add statistics about findings
-            stats['total_findings'] = len(all_findings)
-            stats['findings_by_type'] = {}
-            for finding in all_findings:
-                stats['findings_by_type'][finding.info_type] = \
-                    stats['findings_by_type'].get(finding.info_type, 0) + 1
-            
-            return {
-                'success': True,
-                'findings': [
-                    {
-                        'type': f.info_type,
-                        'value': f.value,
-                        'location': f.location
-                    } for f in all_findings
-                ],
-                'statistics': stats
+            # Group findings by type
+            for finding in findings:
+                finding_type = finding['type']
+                if finding_type not in findings_by_type:
+                    findings_by_type[finding_type] = 0
+                findings_by_type[finding_type] += 1
+        
+        process_time = time.time() - start_time
+        logger.info(f"Total text processing took {process_time:.3f}s")
+        
+        return {
+            'success': True,
+            'findings': all_findings,
+            'statistics': {
+                'total_chars_processed': len(text),
+                'handlers_used': len(self.handlers),
+                'total_findings': len(all_findings),
+                'findings_by_type': findings_by_type,
+                'processing_time': process_time
             }
-            
-        except Exception as e:
-            return {
-                'success': False,
-                'error': str(e),
-                'statistics': stats
-            } 
+        } 

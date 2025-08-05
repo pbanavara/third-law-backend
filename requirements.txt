@@ -1,7 +1,7 @@
 fastapi==0.109.2
 uvicorn==0.27.1
 python-multipart==0.0.9
-pymupdf==1.23.26
+pypdfium2==4.30.0
 clickhouse-driver==0.2.9
 python-dotenv==1.0.0
 prometheus-fastapi-instrumentator==6.1.0
