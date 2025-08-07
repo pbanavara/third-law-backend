@@ -134,52 +134,46 @@ class ClickHouseClient:
             logger.info(f"Data preparation took {(prepare_time - start_prepare):.3f}s")
 
             with self.pool.get_connection() as client:
-                # Check if document already exists
+                # Check if document already exists by filename
                 start_check = time.time()
                 existing = client.execute(
-                    "SELECT count() FROM documents WHERE document_id = %(id)s",
-                    {'id': document_id}
+                    "SELECT document_id FROM documents WHERE filename = %(filename)s LIMIT 1",
+                    {'filename': filename}
                 )
                 check_time = time.time()
                 logger.info(f"Document existence check took {(check_time - start_check):.3f}s")
 
-                if existing[0][0] > 0:
-                    # Document exists, update it
-                    logger.info(f"Document {document_id} already exists, updating...")
+                if existing:
+                    # Document exists with this filename, delete the old record and insert the new one
+                    existing_document_id = existing[0][0]
+                    logger.info(f"Document with filename '{filename}' already exists (ID: {existing_document_id}), replacing...")
                     start_update = time.time()
+                    
+                    # Delete the existing record
+                    client.execute(
+                        "DELETE FROM documents WHERE filename = %(filename)s",
+                        {'filename': filename}
+                    )
+                    
+                    # Insert the new record
                     client.execute(
                         """
-                        ALTER TABLE documents 
-                        UPDATE 
-                            filename = %(filename)s,
-                            upload_timestamp = %(timestamp)s,
-                            content = %(content)s,
-                            content_length = %(content_length)s,
-                            analysis_result = %(analysis_result)s,
-                            sensitive_info_count = %(sensitive_count)s,
-                            email_count = %(email_count)s,
-                            ssn_count = %(ssn_count)s
-                        WHERE document_id = %(document_id)s
+                        INSERT INTO documents (
+                            document_id, filename, upload_timestamp, content,
+                            content_length, analysis_result, sensitive_info_count,
+                            email_count, ssn_count
+                        ) VALUES
                         """,
-                        {
-                            'document_id': document_id,
-                            'filename': filename,
-                            'timestamp': datetime.utcnow(),
-                            'content': content,
-                            'content_length': len(content),
-                            'analysis_result': json.dumps(analysis_result),
-                            'sensitive_count': stats.get('total_findings', 0),
-                            'email_count': findings_by_type.get('email', 0),
-                            'ssn_count': findings_by_type.get('ssn', 0)
-                        }
+                        data
                     )
+                    
                     update_time = time.time()
-                    logger.info(f"Document update took {(update_time - start_update):.3f}s")
+                    logger.info(f"Document replacement took {(update_time - start_update):.3f}s")
                     logger.info(f"Total database operation took {(update_time - start_prepare):.3f}s")
                     return True
                 else:
                     # Document doesn't exist, insert it
-                    logger.info(f"Document {document_id} doesn't exist, inserting...")
+                    logger.info(f"Document with filename '{filename}' doesn't exist, inserting...")
                     start_insert = time.time()
                     client.execute(
                         """
